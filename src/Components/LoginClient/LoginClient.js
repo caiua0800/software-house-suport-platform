@@ -1,47 +1,70 @@
-// src/Components/LoginClient/LoginClient.js
-import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import { useLoading } from "../../Context/LoadingContext"; // ✨ Importa o hook de loading
+import { useLoading } from "../../Context/LoadingContext";
 import styles from "./styles";
 
 const LoginClient = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
   const { loginClient } = useAuth();
-  const { showLoading, hideLoading } = useLoading(); // ✨ Pega as funções do contexto
+  const { showLoading, hideLoading } = useLoading();
   const navigate = useNavigate();
-  const [isSubmitting, setIsSubmitting] = useState(false); // Adicionado para desabilitar o botão
+  const [searchParams] = useSearchParams();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setIsSubmitting(true);
-    showLoading(); // ✨ Mostra o overlay de loading global
+  const attemptLogin = useCallback(
+    async (emailToLogin, passwordToLogin) => {
+      setError("");
+      showLoading();
 
-    try {
-      await loginClient(email, password);
-      // hideLoading() não é necessário aqui, pois a página vai mudar
-    } catch (err) {
-      setError(err.message);
-      setIsSubmitting(false); // Habilita o botão novamente se der erro
-    } finally{
-      hideLoading(); 
-      navigate("/support/dashboard");
+      try {
+        const user = await loginClient(emailToLogin, passwordToLogin);
+
+        // ✨ AQUI ESTÁ A MUDANÇA CRUCIAL ✨
+        // A navegação agora acontece DENTRO do try, APÓS o login ter sucesso.
+        // E usamos um pequeno timeout para dar tempo ao React de atualizar tudo.
+        if (user) {
+          setTimeout(() => {
+            navigate("/support/dashboard", { replace: true });
+            hideLoading(); // Escondemos o loading APÓS a navegação ter sido iniciada
+          }, 100); // 100ms é suficiente para o navegador processar as atualizações
+        } else {
+          // Se o loginClient retornar null por algum motivo
+          throw new Error("Falha ao processar o token de autenticação.");
+        }
+      } catch (err) {
+        setError(err.message || "Credenciais inválidas ou erro no servidor.");
+        hideLoading(); // Esconde o loading em caso de erro
+      }
+    },
+    [loginClient, showLoading, hideLoading, navigate]
+  );
+
+  useEffect(() => {
+    const emailFromUrl = searchParams.get("email");
+    const passwordFromUrl = searchParams.get("password");
+
+    if (emailFromUrl && passwordFromUrl) {
+      attemptLogin(emailFromUrl, passwordFromUrl);
     }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    attemptLogin(email, password);
   };
 
   return (
     <div style={styles.container}>
+      {/* ...O resto do seu JSX do formulário permanece o mesmo... */}
       <form onSubmit={handleSubmit} style={styles.form}>
         <h2 style={styles.title}>Portal de Suporte</h2>
         <p style={styles.subtitle}>
           Acesse seus tickets ou abra um novo chamado.
         </p>
-
         {error && <p style={styles.error}>{error}</p>}
-
         <div style={styles.formGroup}>
           <label htmlFor="email" style={styles.label}>
             Seu Email
@@ -53,10 +76,8 @@ const LoginClient = () => {
             onChange={(e) => setEmail(e.target.value)}
             required
             style={styles.input}
-            disabled={isSubmitting}
           />
         </div>
-
         <div style={styles.formGroup}>
           <label htmlFor="password" style={styles.label}>
             Sua Senha
@@ -68,21 +89,10 @@ const LoginClient = () => {
             onChange={(e) => setPassword(e.target.value)}
             required
             style={styles.input}
-            disabled={isSubmitting}
           />
         </div>
-
-        <button
-          type="submit"
-          style={{
-            ...styles.button,
-            ...(isSubmitting
-              ? { backgroundColor: "#bdc3c7", cursor: "not-allowed" }
-              : {}),
-          }}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Autenticando..." : "Acessar"}
+        <button type="submit" style={styles.button}>
+          Acessar
         </button>
         <p
           style={{ textAlign: "center", fontSize: "0.9rem", marginTop: "1rem" }}
