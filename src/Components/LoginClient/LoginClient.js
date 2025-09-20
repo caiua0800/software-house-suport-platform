@@ -22,12 +22,13 @@ const LoginClient = () => {
 
     try {
       await loginClient(email, password);
-      navigate("/support/dashboard"); // Redireciona para o dashboard de suporte
       // hideLoading() não é necessário aqui, pois a página vai mudar
     } catch (err) {
       setError(err.message);
-      hideLoading(); // ✨ Esconde o loading APENAS se der erro
       setIsSubmitting(false); // Habilita o botão novamente se der erro
+    } finally{
+      hideLoading(); 
+      navigate("/support/dashboard");
     }
   };
 
